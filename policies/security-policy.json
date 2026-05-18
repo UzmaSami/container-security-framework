@@ -1,0 +1,47 @@
+{
+    "security_policy": {
+      "name": "Container Security Policy v1.0",
+      "version": "1.0.0",
+      "rules": {
+        "vulnerability_thresholds": {
+          "critical": 0,
+          "high": 5,
+          "medium": 10,
+          "low": 50
+        },
+        "image_requirements": {
+          "must_run_as_non_root": true,
+          "must_have_healthcheck": true,
+          "must_use_specific_tag": true,
+          "no_latest_tag": true,
+          "no_privileged_mode": true,
+          "read_only_filesystem": true
+        },
+        "blocked_base_images": [
+          "ubuntu",
+          "ubuntu:latest",
+          "centos",
+          "centos:latest",
+          "debian",
+          "debian:latest",
+          "alpine",
+          "alpine:latest"
+        ],
+        "approved_base_images": [
+          "python:3.11-slim",
+          "node:20-alpine",
+          "nginx:1.25-alpine"
+        ],
+        "required_labels": [
+          "maintainer",
+          "version",
+          "security.scan"
+        ]
+      },
+      "actions": {
+        "on_critical_vulnerability": "block_deployment",
+        "on_high_vulnerability": "notify_team",
+        "on_policy_violation": "block_deployment"
+      }
+    }
+  }
