@@ -36,25 +36,25 @@ jobs:
             -f images/secure.Dockerfile \
             -t secure-app:${{ github.sha }} .
 
-      # FIXED: Bypass the action wrapper and install the CLI straight to the runner OS
       - name: Install Trivy Native CLI
         run: |
           curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
-      # 1. Run the scan to safely generate the file (Exit code remains 0 so the pipeline keeps moving)
+      # INSURANCE LAYER 1: Pre-seed a valid empty SARIF shell so a file is GUARANTEED to exist
       - name: Generate SARIF Artifact File
         run: |
-          trivy image --format sarif --output trivy-results.sarif secure-app:${{ github.sha }}
+          echo '{"$schema":"https://json.schemastore.org/sarif-2.1.0-rtm.5.json","version":"2.1.0","runs":[]}' > trivy-results.sarif
+          trivy image --format sarif --output trivy-results.sarif secure-app:${{ github.sha }} || true
 
-      # 2. Upload the file IMMEDIATELY while the pipeline is still green!
+      # INSURANCE LAYER 2: 'if: always()' guarantees this artifact uploads even if previous steps errored
       - name: Upload scan results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trivy-scan-results
           path: trivy-results.sarif
 
-      # 3. NOW we run the scan one more time purely to fail the build if issues exist
-      # (Trivy caches the database from the first run, so this second scan takes less than 2 seconds)
+      # 3. Final Gate: This step deliberately exits with 1 if vulnerabilities exist, after our file is safe
       - name: Enforce Policy Thresholds
         run: |
           trivy image --severity CRITICAL,HIGH --exit-code 1 secure-app:${{ github.sha }}
