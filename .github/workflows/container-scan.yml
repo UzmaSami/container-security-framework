@@ -36,31 +36,28 @@ jobs:
             -f images/secure.Dockerfile \
             -t secure-app:${{ github.sha }} .
 
-      # 1. Run Trivy with absolute path variables and explicit scan-type configuration
-      - name: Run Trivy vulnerability scan and generate SARIF
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'image'
-          image-ref: secure-app:${{ github.sha }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
+      # FIXED: Bypass the action wrapper and install the CLI straight to the runner OS
+      - name: Install Trivy Native CLI
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
-      # 2. Upload the file (This will now grab the artifact directly from the mounted workspace)
+      # 1. Run the scan to safely generate the file (Exit code remains 0 so the pipeline keeps moving)
+      - name: Generate SARIF Artifact File
+        run: |
+          trivy image --format sarif --output trivy-results.sarif secure-app:${{ github.sha }}
+
+      # 2. Upload the file IMMEDIATELY while the pipeline is still green!
       - name: Upload scan results
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trivy-scan-results
-          path: 'trivy-results.sarif'
+          path: trivy-results.sarif
 
-      # 3. Fail the pipeline if vulnerabilities exist, AFTER the file is safely uploaded
-      - name: Enforce Policy Exit Code
+      # 3. NOW we run the scan one more time purely to fail the build if issues exist
+      # (Trivy caches the database from the first run, so this second scan takes less than 2 seconds)
+      - name: Enforce Policy Thresholds
         run: |
-          if grep -q "CRITICAL\|HIGH" trivy-results.sarif; then
-            echo "❌ High or Critical vulnerabilities found! Blocking build."
-            exit 1
-          fi
+          trivy image --severity CRITICAL,HIGH --exit-code 1 secure-app:${{ github.sha }}
 
   # ----------------------------------------
   # JOB 2 - Dockerfile Security Lint
