@@ -36,45 +36,46 @@ jobs:
             -f images/secure.Dockerfile \
             -t secure-app:${{ github.sha }} .
 
-      # FIXED: Added 'sudo' so the runner has permission to install the tool
       - name: Install Trivy Native CLI
         run: |
           curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
 
-      # FIXED: Routing data directly into the reports folder
+      # PROTECTION: Added '|| true' so the job keeps moving even if Trivy notes a warning
       - name: Generate SARIF Security Data
         run: |
           mkdir -p reports
-          trivy image --format sarif --output reports/trivy-results.sarif secure-app:${{ github.sha }}
+          trivy image --format sarif --output reports/trivy-results.sarif secure-app:${{ github.sha }} || true
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      # FIXED: Local execution means the script finds the SARIF file immediately
+      # PROTECTION: Added '|| true' so if your python script crashes, we still see the logs and upload the folder
       - name: Generate Security Report Text File
         run: |
-          python reports/report-generator.py
+          python reports/report-generator.py || echo "⚠️ Report generator script encountered a parsing issue."
 
-      # FIXED: Uploads your finished report while the pipeline is completely healthy
+      # FIXED: 'if: always()' forces GitHub to upload the reports folder no matter what happened above
       - name: Upload Final Security Report Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: security-report
           path: reports/
 
       - name: Pipeline Summary Banner
+        if: always()
         run: |
           echo "========================================="
           echo "   CONTAINER SECURITY PIPELINE DONE"
           echo "========================================="
           echo "✅ Image Build          - Complete"
           echo "✅ Vulnerability Scan   - Complete"
-          echo "✅ Security Report      - Generated"
+          echo "✅ Security Report      - Attempted"
           echo "========================================="
 
-      # FINAL GATE: Now we safely crash the job to block deployment since vulnerabilities exist
+      # FINAL GATE: This step intentionally throws exit code 1 at the very end to mark the build as failed
       - name: Enforce Security Policy Gates
         run: |
           trivy image --severity CRITICAL,HIGH --exit-code 1 secure-app:${{ github.sha }}
