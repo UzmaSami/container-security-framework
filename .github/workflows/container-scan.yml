@@ -14,6 +14,10 @@ on:
   schedule:
     - cron: '0 8 * * *'
 
+# FIXED: Opt-in globally to Node.js 24 execution to silence all runner deprecation warnings
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
 
   # ----------------------------------------
@@ -39,13 +43,9 @@ jobs:
           image-ref: secure-app:${{ github.sha }}
           format: table
           severity: CRITICAL,HIGH
-          # FIXED: Changed from 0 to 1 so the pipeline actually BLOCKS deployments 
-          # on critical flaws, enforcing your json security policy actions!
           exit-code: 1
 
       - name: Run Trivy SARIF report
-        # FIXED: Only run the report generation step if the vulnerability scan passes or fails,
-        # otherwise exit-code: 1 skips this step entirely.
         if: always()
         uses: aquasecurity/trivy-action@master
         with:
@@ -54,7 +54,6 @@ jobs:
           output: trivy-results.sarif
 
       - name: Upload scan results
-        # FIXED: Only execute if the file was created, and updated to v4
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -116,8 +115,6 @@ jobs:
   security-report:
     name: Generate Security Report
     runs-on: ubuntu-latest
-    # FIXED: Changed condition to always execute if prior steps finish, 
-    # ensuring a report is generated even if vulnerabilities/lint errors fail the builds
     if: always()
     needs: [build-and-scan, dockerfile-lint, policy-check]
 
@@ -125,8 +122,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # FIXED: Added artifact retrieval down from Job 1 runner so your 
-      # report-generator.py script actually has data to parse.
       - name: Download Trivy results from Job 1
         uses: actions/download-artifact@v4
         with:
@@ -142,7 +137,6 @@ jobs:
         run: python reports/report-generator.py
 
       - name: Upload report
-        # FIXED: Upgraded version to v4 to prevent runner sync deprecation issues
         uses: actions/upload-artifact@v4
         with:
           name: security-report
