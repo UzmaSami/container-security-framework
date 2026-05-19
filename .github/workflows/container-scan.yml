@@ -36,7 +36,7 @@ jobs:
             -f images/secure.Dockerfile \
             -t secure-app:${{ github.sha }} .
 
-      # FIXED SYNTAX: Standard string formatting without wrapping quotes
+      # 1. Run Trivy to generate the SARIF file cleanly without forcing an immediate crash
       - name: Run Trivy vulnerability scan and generate SARIF
         uses: aquasecurity/trivy-action@master
         with:
@@ -44,15 +44,22 @@ jobs:
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
-          exit-code: 1
 
-      # FIXED PATH: Back to a standard local workspace path
+      # 2. Upload the file (This will now ALWAYS succeed because the file actually exists!)
       - name: Upload scan results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trivy-scan-results
           path: trivy-results.sarif
+
+      # 3. Fail the pipeline if vulnerabilities exist, AFTER the file is safely uploaded
+      - name: Enforce Policy Exit Code
+        run: |
+          if grep -q "CRITICAL\|HIGH" trivy-results.sarif; then
+            echo "❌ High or Critical vulnerabilities found! Blocking build."
+            exit 1
+          fi
 
   # ----------------------------------------
   # JOB 2 - Dockerfile Security Lint
