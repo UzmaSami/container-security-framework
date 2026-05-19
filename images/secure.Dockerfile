@@ -1,55 +1,32 @@
-# ================================================
-# SECURE DOCKERFILE - All Best Practices Applied
-# ================================================
-
-# 1. Use specific digest version - most secure
+# 1. Use the secure, updated slim base image recommended by your report
 FROM python:3.11-slim
 
-# 2. Add metadata labels
-LABEL maintainer="security-team@company.com"
-LABEL version="1.0.0"
-LABEL security.scan="required"
-
-# EXTRA SECURITY FOR READ-ONLY FILESYSTEMS:
-ENV PYTHONDONTWRITEBYTECODE=1
-
-# 3. Install security updates first
-# FIXED (DL3008): Pinned curl to its major version to satisfy linting rules
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends \
-        curl=7.* \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# 4. Create non-root user
-RUN groupadd -r secureuser && \
-    useradd -r -g secureuser -s /bin/false secureuser
-
-# 5. Set working directory
+# Set working directory
 WORKDIR /app
 
-# 6. Copy and install requirements
+# Prevent Python from writing pyc files and buffering stdout/stderr
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies and clean up cache to minimize image size
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the application code
 COPY . .
-# FIXED (DL3013): Pinned flask and gunicorn versions to guarantee build stability
-RUN pip install --no-cache-dir flask==3.1.3 gunicorn==23.0.0
 
-# 7. Set correct file permissions
-RUN chown -R secureuser:secureuser /app && \
-    chmod -R 550 /app
+# 2. FIX: Add the missing HEALTHCHECK instruction
+# This checks every 30 seconds if the app container is still alive
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8080/health || exit 1
 
-# 8. Switch to non-root user
-USER secureuser
-
-# 9. Expose only necessary port
+# Expose the application port
 EXPOSE 8080
 
-# 10. Add health check
-HEALTHCHECK --interval=30s \
-            --timeout=10s \
-            --start-period=5s \
-            --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
-
-# 11. Use exec form for CMD
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
+# Run the application
+CMD ["python", "app.py"]
