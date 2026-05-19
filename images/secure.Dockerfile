@@ -11,14 +11,14 @@ LABEL version="1.0.0"
 LABEL security.scan="required"
 
 # EXTRA SECURITY FOR READ-ONLY FILESYSTEMS:
-# Forces Python to not write .pyc files to disk at runtime
 ENV PYTHONDONTWRITEBYTECODE=1
 
 # 3. Install security updates first
+# FIXED (DL3008): Pinned curl to its major version to satisfy linting rules
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
-        curl \
+        curl=7.* \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -31,7 +31,8 @@ WORKDIR /app
 
 # 6. Copy and install requirements
 COPY . .
-RUN pip install --no-cache-dir flask gunicorn
+# FIXED (DL3013): Pinned flask and gunicorn versions to guarantee build stability
+RUN pip install --no-cache-dir flask==3.1.3 gunicorn==23.0.0
 
 # 7. Set correct file permissions
 RUN chown -R secureuser:secureuser /app && \
@@ -51,4 +52,5 @@ HEALTHCHECK --interval=30s \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # 11. Use exec form for CMD
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
