@@ -14,7 +14,6 @@ on:
   schedule:
     - cron: '0 8 * * *'
 
-# FIXED: Opt-in globally to Node.js 24 execution to silence all runner deprecation warnings
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -27,7 +26,7 @@ jobs:
     name: Build and Security Scan
     runs-on: ubuntu-latest
 
-   steps:
+    steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -37,23 +36,24 @@ jobs:
             -f images/secure.Dockerfile \
             -t secure-app:${{ github.sha }} .
 
-      # FIXED: Explicitly routing the output directory to the runner's root workspace
+      # FIXED SYNTAX: Standard string formatting without wrapping quotes
       - name: Run Trivy vulnerability scan and generate SARIF
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: secure-app:${{ github.sha }}
-          format: 'sarif'
-          output: '${{ github.workspace }}/trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
           exit-code: 1
 
-      # FIXED: Pointed the upload path directly to the absolute workspace path
+      # FIXED PATH: Back to a standard local workspace path
       - name: Upload scan results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trivy-scan-results
-          path: '${{ github.workspace }}/trivy-results.sarif'
+          path: trivy-results.sarif
+
   # ----------------------------------------
   # JOB 2 - Dockerfile Security Lint
   # ----------------------------------------
