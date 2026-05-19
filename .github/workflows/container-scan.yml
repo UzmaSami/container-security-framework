@@ -75,10 +75,10 @@ jobs:
           echo "✅ Security Report      - Attempted"
           echo "========================================="
 
-      # FINAL GATE: This step intentionally throws exit code 1 at the very end to mark the build as failed
+     # FINAL GATE: Only throws exit code 1 for actionable, fixable vulnerabilities
       - name: Enforce Security Policy Gates
         run: |
-          trivy image --severity CRITICAL,HIGH --exit-code 1 secure-app:${{ github.sha }}
+          trivy image --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 secure-app:${{ github.sha }}
 
   # ----------------------------------------
   # JOB 2 - Dockerfile Security Lint
