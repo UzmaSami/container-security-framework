@@ -45,6 +45,7 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: 1
 
+      # FIXED: Added 'if: always()' here so this report runs even if the scan above found vulnerabilities!
       - name: Run Trivy SARIF report
         if: always()
         uses: aquasecurity/trivy-action@master
@@ -59,7 +60,6 @@ jobs:
         with:
           name: trivy-scan-results
           path: trivy-results.sarif
-
   # ----------------------------------------
   # JOB 2 - Dockerfile Security Lint
   # ----------------------------------------

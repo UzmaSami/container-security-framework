@@ -53,4 +53,3 @@ HEALTHCHECK --interval=30s \
 
 # 11. Use exec form for CMD
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
