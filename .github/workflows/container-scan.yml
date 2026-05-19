@@ -20,10 +20,10 @@ env:
 jobs:
 
   # ----------------------------------------
-  # JOB 1 - Build and Scan Container
+  # JOB 1 - Build, Scan, and Generate Report
   # ----------------------------------------
   build-and-scan:
-    name: Build and Security Scan
+    name: Build, Scan, and Report
     runs-on: ubuntu-latest
 
     steps:
@@ -36,26 +36,46 @@ jobs:
             -f images/secure.Dockerfile \
             -t secure-app:${{ github.sha }} .
 
+      # FIXED: Added 'sudo' so the runner has permission to install the tool
       - name: Install Trivy Native CLI
         run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
 
-      # INSURANCE LAYER 1: Pre-seed a valid empty SARIF shell so a file is GUARANTEED to exist
-      - name: Generate SARIF Artifact File
+      # FIXED: Routing data directly into the reports folder
+      - name: Generate SARIF Security Data
         run: |
-          echo '{"$schema":"https://json.schemastore.org/sarif-2.1.0-rtm.5.json","version":"2.1.0","runs":[]}' > trivy-results.sarif
-          trivy image --format sarif --output trivy-results.sarif secure-app:${{ github.sha }} || true
+          mkdir -p reports
+          trivy image --format sarif --output reports/trivy-results.sarif secure-app:${{ github.sha }}
 
-      # INSURANCE LAYER 2: 'if: always()' guarantees this artifact uploads even if previous steps errored
-      - name: Upload scan results
-        if: always()
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      # FIXED: Local execution means the script finds the SARIF file immediately
+      - name: Generate Security Report Text File
+        run: |
+          python reports/report-generator.py
+
+      # FIXED: Uploads your finished report while the pipeline is completely healthy
+      - name: Upload Final Security Report Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-scan-results
-          path: trivy-results.sarif
+          name: security-report
+          path: reports/
 
-      # 3. Final Gate: This step deliberately exits with 1 if vulnerabilities exist, after our file is safe
-      - name: Enforce Policy Thresholds
+      - name: Pipeline Summary Banner
+        run: |
+          echo "========================================="
+          echo "   CONTAINER SECURITY PIPELINE DONE"
+          echo "========================================="
+          echo "✅ Image Build          - Complete"
+          echo "✅ Vulnerability Scan   - Complete"
+          echo "✅ Security Report      - Generated"
+          echo "========================================="
+
+      # FINAL GATE: Now we safely crash the job to block deployment since vulnerabilities exist
+      - name: Enforce Security Policy Gates
         run: |
           trivy image --severity CRITICAL,HIGH --exit-code 1 secure-app:${{ github.sha }}
 
@@ -107,48 +127,3 @@ jobs:
           print(f'✅ Approved base images: {rules[\"approved_base_images\"]}')
           print('✅ All policy checks passed!')
           "
-
-  # ----------------------------------------
-  # JOB 4 - Generate Security Report
-  # ----------------------------------------
-  security-report:
-    name: Generate Security Report
-    runs-on: ubuntu-latest
-    if: always()
-    needs: [build-and-scan, dockerfile-lint, policy-check]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download Trivy results from Job 1
-        uses: actions/download-artifact@v4
-        with:
-          name: trivy-scan-results
-          path: reports/
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Generate report
-        run: python reports/report-generator.py
-
-      - name: Upload report
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-report
-          path: reports/
-
-      - name: Pipeline Summary
-        run: |
-          echo "========================================="
-          echo "   CONTAINER SECURITY PIPELINE DONE"
-          echo "========================================="
-          echo "✅ Image Build          - Complete"
-          echo "✅ Vulnerability Scan   - Complete"
-          echo "✅ Dockerfile Lint      - Complete"
-          echo "✅ Policy Check         - Complete"
-          echo "✅ Security Report      - Generated"
-          echo "========================================="
